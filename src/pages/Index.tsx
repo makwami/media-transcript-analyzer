@@ -49,10 +49,19 @@ const Index = () => {
       });
     } catch (error: any) {
       console.error('Error:', error);
+      
+      let errorMessage = error.message || "Failed to analyze video";
+      
+      // Provide helpful message for caption-related errors
+      if (errorMessage.includes('captions') || errorMessage.includes('subtitles')) {
+        errorMessage = "This video doesn't have captions available. Please try a video with English subtitles or auto-generated captions enabled. Most TED Talks, educational videos, and news videos have captions.";
+      }
+      
       toast({
         title: "Error",
-        description: error.message || "Failed to analyze video",
+        description: errorMessage,
         variant: "destructive",
+        duration: 6000,
       });
     } finally {
       setIsLoading(false);
@@ -89,6 +98,9 @@ const Index = () => {
                 disabled={isLoading}
                 className="text-base"
               />
+              <p className="text-xs text-muted-foreground">
+                Make sure the video has captions/subtitles enabled
+              </p>
             </div>
 
             <div className="space-y-2">
