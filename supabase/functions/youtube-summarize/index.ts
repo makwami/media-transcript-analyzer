@@ -20,129 +20,56 @@ function extractVideoId(url: string): string | null {
   return null;
 }
 
-// Helper function to fetch YouTube transcript
+// Helper function to fetch YouTube transcript using RapidAPI
 async function getTranscript(videoId: string): Promise<string> {
   try {
     console.log('Fetching transcript for video:', videoId);
     
-    // Fetch the video page with proper headers
-    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    const response = await fetch(videoUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
+    const rapidApiKey = Deno.env.get('RAPIDAPI_KEY');
+    if (!rapidApiKey) {
+      throw new Error('RAPIDAPI_KEY is not configured');
+    }
+    
+    const response = await fetch(
+      `https://youtube-transcript3.p.rapidapi.com/api/transcript?videoId=${videoId}`,
+      {
+        method: 'GET',
+        headers: {
+          'x-rapidapi-host': 'youtube-transcript3.p.rapidapi.com',
+          'x-rapidapi-key': rapidApiKey,
+        }
       }
-    });
+    );
     
     if (!response.ok) {
-      throw new Error(`Failed to fetch video page: ${response.status}`);
+      const errorText = await response.text();
+      console.error('RapidAPI error:', response.status, errorText);
+      throw new Error(`Failed to fetch transcript from RapidAPI: ${response.status}`);
     }
     
-    const html = await response.text();
-    console.log('Fetched video page');
+    const data = await response.json();
+    console.log('RapidAPI response received');
     
-    // Try multiple extraction methods
-    
-    // Method 1: Extract from ytInitialPlayerResponse
-    let playerResponse = null;
-    const playerResponsePatterns = [
-      /var ytInitialPlayerResponse\s*=\s*({.+?});/,
-      /ytInitialPlayerResponse\s*=\s*({.+?});/,
-    ];
-    
-    for (const pattern of playerResponsePatterns) {
-      const match = html.match(pattern);
-      if (match) {
-        try {
-          playerResponse = JSON.parse(match[1]);
-          console.log('Found playerResponse');
-          break;
-        } catch (e) {
-          continue;
-        }
-      }
+    if (!data || !data.transcript || !Array.isArray(data.transcript)) {
+      throw new Error('Invalid transcript format from RapidAPI');
     }
     
-    if (playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks) {
-      const captionTracks = playerResponse.captions.playerCaptionsTracklistRenderer.captionTracks;
-      console.log('Found caption tracks from playerResponse:', captionTracks.length);
-      
-      // Find English captions
-      let track = captionTracks.find((t: any) => t.languageCode?.startsWith('en'));
-      if (!track) track = captionTracks[0];
-      
-      const captionUrl = track.baseUrl;
-      console.log('Fetching captions from:', captionUrl.substring(0, 100));
-      
-      const captionResponse = await fetch(captionUrl);
-      const captionXml = await captionResponse.text();
-      
-      const transcript = parseTranscriptXML(captionXml);
-      if (transcript && transcript.length > 10) {
-        console.log('Successfully extracted transcript, length:', transcript.length);
-        return transcript;
-      }
+    // Combine all transcript segments into one string
+    const transcript = data.transcript
+      .map((segment: any) => segment.text || '')
+      .join(' ')
+      .trim();
+    
+    if (!transcript) {
+      throw new Error('No captions available for this video');
     }
     
-    // Method 2: Extract captionTracks directly from JSON in HTML
-    const captionTracksMatch = html.match(/"captionTracks":\s*(\[.+?\])/);
-    if (captionTracksMatch) {
-      try {
-        const captionTracks = JSON.parse(captionTracksMatch[1]);
-        console.log('Found captionTracks directly in HTML:', captionTracks.length);
-        
-        let track = captionTracks.find((t: any) => t.languageCode?.startsWith('en'));
-        if (!track) track = captionTracks[0];
-        
-        const captionUrl = track.baseUrl;
-        const captionResponse = await fetch(captionUrl);
-        const captionXml = await captionResponse.text();
-        
-        const transcript = parseTranscriptXML(captionXml);
-        if (transcript && transcript.length > 10) {
-          console.log('Successfully extracted transcript from direct match');
-          return transcript;
-        }
-      } catch (e) {
-        console.log('Failed to parse captionTracks:', e);
-      }
-    }
-    
-    throw new Error('No captions available for this video. The video may not have subtitles or captions enabled.');
+    console.log('Successfully extracted transcript, length:', transcript.length);
+    return transcript;
     
   } catch (error) {
     console.error('Error fetching transcript:', error);
     throw error;
-  }
-}
-
-// Helper function to parse transcript XML
-function parseTranscriptXML(xml: string): string {
-  try {
-    const textMatches = xml.matchAll(/<text[^>]*>(.*?)<\/text>/g);
-    let transcript = '';
-    
-    for (const match of textMatches) {
-      const text = match[1]
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&nbsp;/g, ' ')
-        .replace(/<[^>]+>/g, '')
-        .replace(/\n/g, ' ')
-        .trim();
-      
-      if (text) {
-        transcript += text + ' ';
-      }
-    }
-    
-    return transcript.trim();
-  } catch (error) {
-    console.error('Error parsing XML:', error);
-    return '';
   }
 }
 
