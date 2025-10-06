@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Youtube } from "lucide-react";
-import { analyzeYoutubeVideo } from "@/lib/youtubeAnalyzer";
+import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
   const [youtubeUrl, setYoutubeUrl] = useState("");
@@ -29,12 +29,20 @@ const Index = () => {
     setResult("");
 
     try {
-      const result = await analyzeYoutubeVideo(
-        youtubeUrl.trim(),
-        customPrompt.trim() || "Summarize this video"
-      );
+      const { data, error } = await supabase.functions.invoke('youtube-summarize', {
+        body: { 
+          youtubeUrl: youtubeUrl.trim(),
+          customPrompt: customPrompt.trim() || "Summarize this video"
+        }
+      });
 
-      setResult(result);
+      if (error) throw error;
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      setResult(data.result);
       toast({
         title: "Success",
         description: "Video analyzed successfully!",
@@ -45,7 +53,7 @@ const Index = () => {
       let errorMessage = error.message || "Failed to analyze video";
       
       // Provide helpful message for caption-related errors
-      if (errorMessage.includes('captions') || errorMessage.includes('subtitles') || errorMessage.includes('transcript')) {
+      if (errorMessage.includes('captions') || errorMessage.includes('subtitles')) {
         errorMessage = "This video doesn't have captions available. Please try a video with English subtitles or auto-generated captions enabled. Most TED Talks, educational videos, and news videos have captions.";
       }
       
