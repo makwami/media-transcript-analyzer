@@ -143,21 +143,27 @@ serve(async (req) => {
       );
     }
 
-    // Validate file type - M4A temporarily disabled due to compatibility issues
+    // Validate file type - check both MIME type and file extension for M4A compatibility
     const supportedTypes = [
-      'audio/mpeg', 'audio/wav', 'video/mp4', 
+      'audio/mpeg', 'audio/wav', 'audio/mp4', 'video/mp4', 
       'video/quicktime', 'video/x-msvideo', 'video/webm'
     ];
     
-    if (!supportedTypes.includes(mimeType)) {
-      let errorMessage = 'Unsupported file type';
-      if (mimeType === 'audio/mp4' || fileName.toLowerCase().endsWith('.m4a')) {
-        errorMessage = 'M4A files are temporarily not supported due to compatibility issues. Please convert your M4A file to MP3 format and try again.';
-      }
+    const supportedExtensions = ['.mp3', '.wav', '.m4a', '.mp4', '.mov', '.avi', '.webm'];
+    const fileExtension = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
+    
+    const isValidType = supportedTypes.includes(mimeType) || supportedExtensions.includes(fileExtension);
+    
+    if (!isValidType) {
       return new Response(
-        JSON.stringify({ error: errorMessage }),
+        JSON.stringify({ error: 'Unsupported file type' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+    
+    // For M4A files, ensure proper MIME type for processing
+    if (fileName.toLowerCase().endsWith('.m4a')) {
+      console.log('M4A file detected, will be processed as audio/mp4');
     }
 
     // Transcribe the audio

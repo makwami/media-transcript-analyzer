@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Youtube, Upload, Moon, Sun, Copy, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { FileUpload } from "@/components/FileUpload";
+import { AudioConverter } from "@/utils/audioConverter";
 
 const Index = () => {
   const [youtubeUrl, setYoutubeUrl] = useState("");
@@ -109,6 +110,23 @@ const Index = () => {
     setFileError(null);
 
     try {
+      // Convert M4A to MP3 if needed
+      setUploadProgress(10);
+      toast({
+        title: "Processing",
+        description: "Converting audio file for optimal compatibility...",
+      });
+      
+      const processedFile = await AudioConverter.convertM4AToMP3(selectedFile);
+      setUploadProgress(20);
+      
+      if (processedFile !== selectedFile) {
+        toast({
+          title: "Converted",
+          description: "M4A file converted to MP3 for better compatibility",
+        });
+      }
+
       // Convert file to base64
       const reader = new FileReader();
       const fileData = await new Promise<string>((resolve, reject) => {
@@ -119,16 +137,16 @@ const Index = () => {
           resolve(base64Data);
         };
         reader.onerror = reject;
-        reader.readAsDataURL(selectedFile);
+        reader.readAsDataURL(processedFile);
       });
 
-      setUploadProgress(25);
+      setUploadProgress(30);
 
       const { data, error } = await supabase.functions.invoke('youtube-file-transcribe', {
         body: {
           fileData,
-          fileName: selectedFile.name,
-          mimeType: selectedFile.type,
+          fileName: processedFile.name,
+          mimeType: processedFile.type,
           customPrompt: customPrompt.trim() || "Summarize this audio/video content"
         }
       });
