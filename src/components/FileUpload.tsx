@@ -16,7 +16,8 @@ interface FileUploadProps {
 const ACCEPTED_FILE_TYPES = {
   'audio/mpeg': ['.mp3'],
   'audio/wav': ['.wav'],
-  'audio/mp4': ['.m4a'],
+  // Temporarily disabled M4A due to compatibility issues - use MP3 instead
+  // 'audio/mp4': ['.m4a'],
   'video/mp4': ['.mp4'],
   'video/quicktime': ['.mov'],
   'video/x-msvideo': ['.avi'],
@@ -72,7 +73,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         return `File is too large. Maximum size is ${formatFileSize(MAX_FILE_SIZE)}.`;
       }
       if (rejection.errors.some(e => e.code === 'file-invalid-type')) {
-        return 'Invalid file type. Please upload audio or video files (MP3, MP4, WAV, M4A, MOV, AVI, WebM).';
+        return 'Invalid file type. Please upload audio or video files (MP3, MP4, WAV, MOV, AVI, WebM). Note: M4A files should be converted to MP3 for best compatibility.';
       }
     }
     return null;
@@ -100,7 +101,11 @@ export const FileUpload: React.FC<FileUploadProps> = ({
             Drag and drop your file here, or click to browse
           </p>
           <p className="text-sm text-muted-foreground">
-            Supports: MP3, MP4, WAV, M4A, MOV, AVI, WebM (max {formatFileSize(MAX_FILE_SIZE)})
+            Supports: MP3, MP4, WAV, MOV, AVI, WebM (max {formatFileSize(MAX_FILE_SIZE)})
+            <br />
+            <span className="text-amber-600 dark:text-amber-400">
+              M4A files: Please convert to MP3 for best compatibility
+            </span>
           </p>
         </div>
       ) : (

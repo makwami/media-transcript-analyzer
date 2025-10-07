@@ -6,10 +6,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+
 // Helper function to transcribe audio using OpenAI Whisper API
 async function transcribeAudio(audioFile: File): Promise<string> {
   try {
-    console.log('Starting transcription for file:', audioFile.name, 'Size:', audioFile.size);
+    console.log('Starting transcription for file:', audioFile.name, 'Size:', audioFile.size, 'Type:', audioFile.type);
     
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openAIApiKey) {
@@ -23,7 +24,7 @@ async function transcribeAudio(audioFile: File): Promise<string> {
     formData.append('response_format', 'text');
     formData.append('language', 'en'); // Can be made configurable
 
-    console.log('Calling OpenAI Whisper API...');
+    console.log('Calling OpenAI Whisper API with file:', audioFile.name, 'type:', audioFile.type);
 
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
@@ -36,7 +37,18 @@ async function transcribeAudio(audioFile: File): Promise<string> {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Whisper API error:', response.status, errorText);
-      throw new Error(`Whisper API error: ${response.status} - ${errorText}`);
+      
+      // Provide more helpful error messages based on the error
+      let userFriendlyMessage = `Whisper API error: ${response.status}`;
+      if (errorText.includes('Invalid file format')) {
+        userFriendlyMessage = `Audio format not supported. For M4A files, please ensure they are properly encoded. Try converting to MP3 if issues persist.`;
+      } else if (errorText.includes('file too large')) {
+        userFriendlyMessage = `File is too large. Maximum size is 25MB.`;
+      } else if (errorText.includes('duration')) {
+        userFriendlyMessage = `Audio file is too long. Maximum duration is about 3 hours.`;
+      }
+      
+      throw new Error(userFriendlyMessage);
     }
 
     const transcript = await response.text();
@@ -56,18 +68,38 @@ async function transcribeAudio(audioFile: File): Promise<string> {
 
 // Helper function to convert base64 to File
 function base64ToFile(base64String: string, fileName: string, mimeType: string): File {
-  // Remove data URL prefix if present
-  const base64Data = base64String.includes(',') ? base64String.split(',')[1] : base64String;
-  
-  // Convert base64 to Uint8Array
-  const binaryString = atob(base64Data);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
+  try {
+    console.log('Converting base64 to file:', fileName, 'MIME:', mimeType);
+    console.log('Base64 length:', base64String.length);
+    
+    // Remove data URL prefix if present
+    const base64Data = base64String.includes(',') ? base64String.split(',')[1] : base64String;
+    console.log('Cleaned base64 length:', base64Data.length);
+    
+    // Convert base64 to Uint8Array
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    
+    console.log('File size after conversion:', bytes.length);
+    
+    // Ensure proper MIME type for Whisper API
+    let finalMimeType = mimeType;
+    if (fileName.toLowerCase().endsWith('.m4a')) {
+      finalMimeType = 'audio/mp4';
+      console.log('M4A file detected, using audio/mp4 MIME type');
+    }
+    
+    // Create File object
+    const file = new File([bytes], fileName, { type: finalMimeType });
+    console.log('Created file object:', file.name, file.size, file.type);
+    return file;
+  } catch (error) {
+    console.error('Error in base64ToFile:', error);
+    throw new Error(`Failed to convert base64 to file: ${error.message}`);
   }
-  
-  // Create File object
-  return new File([bytes], fileName, { type: mimeType });
 }
 
 serve(async (req) => {
@@ -90,7 +122,17 @@ serve(async (req) => {
     }
 
     // Convert base64 data to File object
-    const audioFile = base64ToFile(fileData, fileName, mimeType);
+    let audioFile;
+    try {
+      audioFile = base64ToFile(fileData, fileName, mimeType);
+      console.log('Successfully converted to file object');
+    } catch (error) {
+      console.error('Failed to convert base64 to file:', error);
+      return new Response(
+        JSON.stringify({ error: `File conversion failed: ${error.message}` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     
     // Check file size (25MB limit for Whisper API)
     const maxSize = 25 * 1024 * 1024; // 25MB
@@ -101,15 +143,19 @@ serve(async (req) => {
       );
     }
 
-    // Validate file type
+    // Validate file type - M4A temporarily disabled due to compatibility issues
     const supportedTypes = [
-      'audio/mpeg', 'audio/wav', 'audio/mp4', 'video/mp4', 
+      'audio/mpeg', 'audio/wav', 'video/mp4', 
       'video/quicktime', 'video/x-msvideo', 'video/webm'
     ];
     
     if (!supportedTypes.includes(mimeType)) {
+      let errorMessage = 'Unsupported file type';
+      if (mimeType === 'audio/mp4' || fileName.toLowerCase().endsWith('.m4a')) {
+        errorMessage = 'M4A files are temporarily not supported due to compatibility issues. Please convert your M4A file to MP3 format and try again.';
+      }
       return new Response(
-        JSON.stringify({ error: 'Unsupported file type' }),
+        JSON.stringify({ error: errorMessage }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
