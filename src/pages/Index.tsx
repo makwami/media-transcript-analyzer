@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Youtube, Upload, Moon, Sun } from "lucide-react";
+import { Loader2, Youtube, Upload, Moon, Sun, Copy, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { FileUpload } from "@/components/FileUpload";
 
@@ -17,6 +17,7 @@ const Index = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [fileError, setFileError] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
   const { toast } = useToast();
 
   // Initialize dark mode based on system preference and localStorage
@@ -177,6 +178,24 @@ const Index = () => {
     }
   };
 
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(result);
+      setIsCopied(true);
+      toast({
+        title: "Copied!",
+        description: "Analysis copied to clipboard",
+      });
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to copy to clipboard",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-accent/10">
       <div className="container mx-auto px-4 py-12 max-w-4xl">
@@ -331,7 +350,27 @@ const Index = () => {
 
         {result && (
           <div className="bg-card rounded-lg shadow-lg border p-8 animate-in fade-in slide-in-from-bottom-4">
-            <h2 className="text-2xl font-semibold mb-4">AI Analysis</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-semibold">AI Analysis</h2>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={copyToClipboard}
+                className="flex items-center gap-2"
+              >
+                {isCopied ? (
+                  <>
+                    <Check className="h-4 w-4" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4" />
+                    Copy
+                  </>
+                )}
+              </Button>
+            </div>
             <div className="prose prose-sm max-w-none dark:prose-invert">
               <p className="whitespace-pre-wrap text-foreground leading-relaxed">
                 {result}
