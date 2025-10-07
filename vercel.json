@@ -1,11 +1,4 @@
 {
-  "build": {
-    "env": {
-      "VITE_SUPABASE_URL": "@supabase-url",
-      "VITE_SUPABASE_PUBLISHABLE_KEY": "@supabase-publishable-key",
-      "VITE_SUPABASE_PROJECT_ID": "@supabase-project-id"
-    }
-  },
   "headers": [
     {
       "source": "/(.*)",
