@@ -8,6 +8,9 @@ import { Loader2, Youtube, Upload, Moon, Sun, Copy, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { FileUpload } from "@/components/FileUpload";
 import { AudioConverter } from "@/utils/audioConverter";
+import { ContextManager } from "@/utils/contextManager";
+import { FollowUpPrompt } from "@/components/FollowUpPrompt";
+import { ConversationHistory } from "@/components/ConversationHistory";
 
 const Index = () => {
   const [youtubeUrl, setYoutubeUrl] = useState("");
@@ -19,6 +22,8 @@ const Index = () => {
   const [fileError, setFileError] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  const [isFollowUpLoading, setIsFollowUpLoading] = useState(false);
+  const [conversationHistory, setConversationHistory] = useState(ContextManager.getRecentItems());
   const { toast } = useToast();
 
   // Initialize dark mode based on system preference and localStorage
@@ -64,6 +69,16 @@ const Index = () => {
       }
 
       setResult(data.result);
+      
+      // Save to conversation history
+      ContextManager.addTranscription(
+        { type: 'youtube', name: youtubeUrl.trim() },
+        customPrompt.trim() || "Summarize this video",
+        data.result,
+        data.transcript || ''
+      );
+      setConversationHistory(ContextManager.getRecentItems());
+      
       toast({
         title: "Success",
         description: "Video analyzed successfully!",
@@ -161,6 +176,16 @@ const Index = () => {
 
       setUploadProgress(100);
       setResult(data.result);
+      
+      // Save to conversation history
+      ContextManager.addTranscription(
+        { type: 'file', name: processedFile.name },
+        customPrompt.trim() || "Summarize this audio/video content",
+        data.result,
+        data.transcript || ''
+      );
+      setConversationHistory(ContextManager.getRecentItems());
+      
       toast({
         title: "Success",
         description: "File analyzed successfully!",
@@ -212,6 +237,62 @@ const Index = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const handleFollowUpPrompt = async (prompt: string) => {
+    setIsFollowUpLoading(true);
+    
+    try {
+      // Get conversation context for AI
+      const context = ContextManager.getAIContext();
+      
+      const { data, error } = await supabase.functions.invoke('follow-up-prompt', {
+        body: {
+          prompt: prompt.trim(),
+          context: context
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      // Update the result with follow-up response
+      setResult(data.result);
+      
+      // Save to conversation history
+      ContextManager.addFollowUp(prompt.trim(), data.result);
+      setConversationHistory(ContextManager.getRecentItems());
+      
+      toast({
+        title: "Follow-up Complete",
+        description: "Question answered based on previous analysis",
+      });
+      
+    } catch (error: unknown) {
+      console.error('Follow-up error:', error);
+      
+      const errorMessage = error instanceof Error ? error.message : "Failed to process follow-up question";
+      
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsFollowUpLoading(false);
+    }
+  };
+
+  const clearConversationHistory = () => {
+    ContextManager.clearContext();
+    setConversationHistory([]);
+    toast({
+      title: "History Cleared",
+      description: "Conversation history has been cleared",
+    });
   };
 
   return (
@@ -396,6 +477,19 @@ const Index = () => {
             </div>
           </div>
         )}
+
+        {result && (
+          <FollowUpPrompt
+            onSubmit={handleFollowUpPrompt}
+            isLoading={isFollowUpLoading}
+            disabled={isLoading}
+          />
+        )}
+
+        <ConversationHistory
+          items={conversationHistory}
+          onClear={clearConversationHistory}
+        />
       </div>
     </div>
   );
